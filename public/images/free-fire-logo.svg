@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 110" fill="none">
+  <text
+    x="180"
+    y="58"
+    text-anchor="middle"
+    fill="#FFFFFF"
+    font-family="Impact, 'Arial Black', sans-serif"
+    font-size="56"
+    font-weight="900"
+    letter-spacing="3"
+  >
+    FREE F
+    <tspan fill="transparent">I</tspan>
+    RE
+  </text>
+  <g transform="translate(214, 12)">
+    <path d="M8 0L14 7V35H4V9L8 0Z" fill="#F97316" />
+    <rect x="2" y="35" width="14" height="4" rx="1" fill="#FB923C" />
+    <rect x="6" y="39" width="6" height="14" rx="1" fill="#F97316" />
+  </g>
+  <rect x="34" y="72" width="292" height="24" stroke="#E2E8F0" stroke-opacity="0.7" stroke-width="1.4" />
+  <text
+    x="180"
+    y="89"
+    text-anchor="middle"
+    fill="#F8FAFC"
+    font-family="Inter, Arial, sans-serif"
+    font-size="13"
+    font-weight="600"
+    letter-spacing="10"
+  >
+    BATTLEGROUNDS
+  </text>
+</svg>
+

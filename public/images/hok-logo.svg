@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 115" fill="none">
+  <defs>
+    <linearGradient id="hokGold" x1="150" y1="8" x2="210" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FEF08A" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+  </defs>
+  <polygon points="180,10 198,28 180,46 162,28" fill="url(#hokGold)" />
+  <path d="M152 28L165 18L180 28L195 18L208 28L198 42H162L152 28Z" stroke="url(#hokGold)" stroke-width="2" fill="none" />
+  <text
+    x="180"
+    y="78"
+    text-anchor="middle"
+    fill="#FFFFFF"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="24"
+    font-weight="700"
+    letter-spacing="3"
+  >
+    HONOR OF KINGS
+  </text>
+  <line x1="72" y1="90" x2="288" y2="90" stroke="url(#hokGold)" stroke-width="1.5" stroke-opacity="0.75" />
+</svg>
+

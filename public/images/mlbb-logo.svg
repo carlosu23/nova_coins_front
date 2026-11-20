@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120" fill="none">
+  <defs>
+    <linearGradient id="mlGold" x1="140" y1="8" x2="220" y2="68" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FDE047" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M150 14L180 6L210 14L204 46L180 62L156 46L150 14Z"
+    fill="#140829"
+    stroke="url(#mlGold)"
+    stroke-width="3.2"
+  />
+  <path d="M164 42V22L173 22L180 34L187 22H196V42H189V31L180 44L171 31V42H164Z" fill="url(#mlGold)" />
+  <text
+    x="180"
+    y="88"
+    text-anchor="middle"
+    fill="#FFFFFF"
+    font-family="Space Grotesk, Arial, sans-serif"
+    font-size="25"
+    font-weight="800"
+    letter-spacing="2"
+  >
+    MOBILE LEGENDS
+  </text>
+  <text
+    x="180"
+    y="108"
+    text-anchor="middle"
+    fill="#FACC15"
+    font-family="Inter, Arial, sans-serif"
+    font-size="11.5"
+    font-weight="700"
+    letter-spacing="6"
+  >
+    BANG BANG
+  </text>
+</svg>
+

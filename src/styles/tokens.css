@@ -1,0 +1,66 @@
+:root {
+  --nc-bg-void: #05010C;
+  --nc-bg-deep: #090215;
+  --nc-bg-surface: #120428;
+  --nc-bg-elevated: #220746;
+  --nc-bg-glass: rgba(12, 3, 28, 0.84);
+
+  --nc-grad-predominant: linear-gradient(135deg, #05010D 0%, #110426 52%, #2B0854 100%);
+  --nc-grad-surface: linear-gradient(145deg, #080214 0%, #160532 60%, #310960 100%);
+  --nc-grad-card: linear-gradient(145deg, #070112 0%, #150530 58%, #2C0856 100%);
+
+  --nc-purple-900: #1E0B3B;
+  --nc-purple-800: #2D1154;
+  --nc-purple-700: #4C1D95;
+  --nc-purple-600: #7C1FFF;
+  --nc-purple-500: #9333EA;
+  --nc-purple-400: #A855F7;
+  --nc-purple-300: #C084FC;
+
+  --nc-magenta-600: #C026D3;
+  --nc-magenta-500: #D946EF;
+  --nc-magenta-400: #E879F9;
+  --nc-magenta-300: #F0ABFC;
+
+  --nc-gold-700: #B45309;
+  --nc-gold-600: #D97706;
+  --nc-gold-500: #F59E0B;
+  --nc-gold-400: #FACC15;
+  --nc-gold-300: #FDE047;
+
+  --nc-cyan-600: #0284C7;
+  --nc-cyan-500: #0EA5E9;
+  --nc-cyan-400: #00D2FF;
+  --nc-cyan-300: #22D3EE;
+
+  --nc-success: #22C55E;
+  --nc-success-soft: rgba(34, 197, 94, 0.14);
+  --nc-warning: #F97316;
+  --nc-danger: #EF4444;
+
+  --nc-text-primary: #FFFFFF;
+  --nc-text-silver: #E2E8F0;
+  --nc-text-muted: #B0BDD0;
+  --nc-text-dim: #94A3B8;
+
+  --nc-border-subtle: rgba(147, 51, 234, 0.34);
+  --nc-border-glow: rgba(168, 85, 247, 0.72);
+  --nc-border-gold: rgba(250, 204, 21, 0.5);
+
+  --nc-grad-brand: linear-gradient(135deg, #7C1FFF 0%, #D946EF 100%);
+  --nc-grad-gold: linear-gradient(135deg, #B45309 0%, #FACC15 55%, #F59E0B 100%);
+  --nc-grad-cyber: linear-gradient(135deg, #8B5CF6 0%, #F0ABFC 100%);
+
+  --nc-shadow-purple: 0 12px 36px rgba(124, 31, 255, 0.32);
+  --nc-shadow-gold: 0 10px 28px rgba(250, 204, 21, 0.25);
+  --nc-shadow-card: 0 16px 40px rgba(3, 1, 8, 0.75);
+
+  --nc-font-display: 'Space Grotesk', system-ui, sans-serif;
+  --nc-font-sans: 'Inter', system-ui, sans-serif;
+  --nc-font-mono: 'JetBrains Mono', monospace;
+
+  --nc-radius-sm: 10px;
+  --nc-radius-md: 14px;
+  --nc-radius-lg: 18px;
+  --nc-radius-xl: 24px;
+}

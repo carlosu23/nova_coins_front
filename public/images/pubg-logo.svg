@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 110" fill="none">
+  <rect x="74" y="14" width="212" height="60" rx="4" stroke="#FACC15" stroke-width="4.5" fill="#090702" />
+  <text
+    x="180"
+    y="60"
+    text-anchor="middle"
+    fill="#FACC15"
+    font-family="Impact, 'Arial Black', sans-serif"
+    font-size="46"
+    font-weight="900"
+    letter-spacing="6"
+  >
+    PUBG
+  </text>
+  <text
+    x="180"
+    y="98"
+    text-anchor="middle"
+    fill="#F8FAFC"
+    font-family="Inter, Arial, sans-serif"
+    font-size="15"
+    font-weight="800"
+    letter-spacing="9"
+  >
+    MOBILE
+  </text>
+</svg>
+
