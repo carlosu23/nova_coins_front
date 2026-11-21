@@ -119,9 +119,41 @@ export async function fetchCurrentUser(): Promise<{ user: UserProfile }> {
   return apiRequest('/auth/me');
 }
 
+export async function updateProfileRequest(payload: {
+  fullName: string;
+  phone: string;
+}): Promise<{ user: UserProfile }> {
+  return apiRequest('/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function changePasswordRequest(payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<{ ok: boolean }> {
+  return apiRequest('/auth/password', {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function validatePlayerRequest(payload: {
+  packageId: string;
+  playerId: string;
+  zoneId?: string;
+  targetPayload?: Record<string, string>;
+}): Promise<{ status: 'valid' | 'invalid' | 'unverified'; playerName: string | null; reason: string | null }> {
+  return apiRequest('/catalog/validate-player', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function topUpWalletRequest(
   amountUsd: number,
-  options?: { paymentMethod?: string; referenceCode?: string }
+  options?: { paymentMethod?: string; referenceCode?: string; proofImage?: string }
 ): Promise<{
   user: UserProfile;
   order: { id: string; amountUsd: number; status: string };
@@ -131,7 +163,8 @@ export async function topUpWalletRequest(
     body: JSON.stringify({
       amountUsd,
       paymentMethod: options?.paymentMethod,
-      referenceCode: options?.referenceCode
+      referenceCode: options?.referenceCode,
+      proofImage: options?.proofImage
     })
   });
 }
@@ -155,6 +188,7 @@ export async function createOrderRequest(payload: {
   packageLabel: string;
   playerId: string;
   zoneId?: string;
+  targetPayload?: Record<string, string>;
   accountName?: string;
   whatsapp?: string;
   amountUsd: number;

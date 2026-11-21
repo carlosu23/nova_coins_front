@@ -943,8 +943,14 @@ export function ResellerPanelPage({
                           {order.gameTitle} · {order.packageLabel}
                         </strong>
                         <span>
-                          Orden {order.id} · ID: {order.playerId} · {order.status} · {order.dateLabel}
+                          Orden {order.id} · ID: {order.playerId} · {order.status}
+                          {order.fulfillmentStatus ? ` (${order.fulfillmentStatus})` : ''} · {order.dateLabel}
                         </span>
+                        {order.codes && order.codes.length > 0 ? (
+                          <span className="nc-mono" style={{ fontSize: '0.78rem', color: 'var(--nc-gold, #f5c542)', display: 'block', marginTop: '4px', wordBreak: 'break-all' }}>
+                            PIN / Código: {order.codes.join(' · ')}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="nc-panel-order-actions">
                         <strong className="nc-mono nc-price-gold">${order.amountUsd.toFixed(2)}</strong>

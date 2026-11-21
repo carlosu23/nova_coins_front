@@ -1,5 +1,14 @@
 export type GameCategory = 'topup' | 'giftcard';
 
+export interface TargetSchemaField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select' | 'email';
+  required: boolean;
+  placeholder?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
 export interface GamePackage {
   id: string;
   label: string;
@@ -8,6 +17,11 @@ export interface GamePackage {
   publicPriceUsd: number;
   resellerPriceUsd: number;
   popular?: boolean;
+  inStock?: boolean;
+  availableStock?: number | null;
+  requiresTarget?: boolean;
+  targetSchema?: TargetSchemaField[];
+  supplierLinked?: boolean;
 }
 
 export interface GameItem {

@@ -32,6 +32,8 @@ export interface UserOrder {
   amountUsd: number;
   paymentMethod: string;
   status: OrderStatus;
+  fulfillmentStatus?: string;
+  codes?: string[];
   createdAt?: string;
   dateLabel: string;
 }

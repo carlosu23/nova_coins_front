@@ -1,7 +1,12 @@
 import { CheckCircle2, CreditCard, ShieldCheck, Sparkles, Upload, UserCheck, X, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { type GameItem, type GamePackage } from '../data/catalog';
-import { createUserSocket, fetchActiveChannels, type PublicPaymentChannel } from '../services/api';
+import {
+  createUserSocket,
+  fetchActiveChannels,
+  type PublicPaymentChannel,
+  validatePlayerRequest
+} from '../services/api';
 import { type UserOrder } from '../types/user';
 
 interface QuickTopUpModalProps {
@@ -16,6 +21,7 @@ interface QuickTopUpModalProps {
     packageLabel: string;
     playerId: string;
     zoneId?: string;
+    targetPayload?: Record<string, string>;
     amountUsd: number;
     paymentMethod: string;
     referenceCode?: string;
@@ -36,6 +42,7 @@ export function QuickTopUpModal({
 }: QuickTopUpModalProps) {
   const [playerId, setPlayerId] = useState('');
   const [zoneId, setZoneId] = useState('');
+  const [targetValues, setTargetValues] = useState<Record<string, string>>({});
   const [referenceCode, setReferenceCode] = useState('');
   const [proofImage, setProofImage] = useState<string | undefined>(undefined);
   const [proofFileName, setProofFileName] = useState('');
@@ -43,6 +50,12 @@ export function QuickTopUpModal({
   const [selectedPackId, setSelectedPackId] = useState<string>('');
   const [paymentId, setPaymentId] = useState<string>(isAuthenticated ? 'wallet' : '');
   const [submitting, setSubmitting] = useState(false);
+  const [validatingPlayer, setValidatingPlayer] = useState(false);
+  const [playerValidation, setPlayerValidation] = useState<{
+    status: 'valid' | 'invalid' | 'unverified';
+    playerName: string | null;
+    reason: string | null;
+  } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [createdOrder, setCreatedOrder] = useState<UserOrder | null>(null);
 
@@ -92,12 +105,60 @@ export function QuickTopUpModal({
 
   const activePack: GamePackage =
     game.packages.find((p) => p.id === selectedPackId) ??
-    game.packages.find((p) => p.popular) ??
+    game.packages.find((p) => p.popular && p.inStock !== false) ??
+    game.packages.find((p) => p.inStock !== false) ??
     game.packages[0];
 
+  const dynamicSchema = activePack.targetSchema && activePack.targetSchema.length > 0 ? activePack.targetSchema : null;
   const finalPrice = isResellerMode ? activePack.resellerPriceUsd : activePack.publicPriceUsd;
   const savings = activePack.publicPriceUsd - activePack.resellerPriceUsd;
   const selectedChannel = channels.find((c) => c.id === paymentId) ?? null;
+
+  const resolveTargetSubmission = () => {
+    if (dynamicSchema) {
+      const payload: Record<string, string> = {};
+      for (const field of dynamicSchema) {
+        const val = String(targetValues[field.key] ?? '').trim();
+        if (val) {
+          payload[field.key] = val;
+        }
+      }
+      const primaryField = dynamicSchema.find((f) => !/zone|server|region/i.test(f.key)) ?? dynamicSchema[0];
+      const zoneField = dynamicSchema.find((f) => /zone|server|region/i.test(f.key));
+      return {
+        playerId: primaryField ? String(payload[primaryField.key] ?? '') : '',
+        zoneId: zoneField ? payload[zoneField.key] : undefined,
+        targetPayload: Object.keys(payload).length > 0 ? payload : undefined
+      };
+    }
+    return {
+      playerId: playerId.trim(),
+      zoneId: game.requiresZoneId ? zoneId.trim() || undefined : undefined,
+      targetPayload: undefined
+    };
+  };
+
+  const handleValidatePlayer = async () => {
+    const resolved = resolveTargetSubmission();
+    if (!resolved.playerId || validatingPlayer) {
+      return;
+    }
+    setValidatingPlayer(true);
+    setPlayerValidation(null);
+    try {
+      const res = await validatePlayerRequest({
+        packageId: activePack.id,
+        playerId: resolved.playerId,
+        zoneId: resolved.zoneId,
+        targetPayload: resolved.targetPayload
+      });
+      setPlayerValidation(res);
+    } catch {
+      setPlayerValidation({ status: 'unverified', playerName: null, reason: 'error' });
+    } finally {
+      setValidatingPlayer(false);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,11 +186,26 @@ export function QuickTopUpModal({
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!playerId.trim()) {
+    if (activePack.inStock === false) {
+      setErrorMessage('Este paquete no tiene stock disponible en este momento.');
       return;
     }
-    if (game.requiresZoneId && !zoneId.trim()) {
-      return;
+
+    const resolved = resolveTargetSubmission();
+    if (dynamicSchema) {
+      for (const field of dynamicSchema) {
+        if (field.required && !String(targetValues[field.key] ?? '').trim()) {
+          setErrorMessage(`Completa el campo requerido: ${field.label}.`);
+          return;
+        }
+      }
+    } else {
+      if (!resolved.playerId) {
+        return;
+      }
+      if (game.requiresZoneId && !resolved.zoneId) {
+        return;
+      }
     }
     if (!isAuthenticated) {
       onRequireAuth();
@@ -152,8 +228,9 @@ export function QuickTopUpModal({
         packageId: activePack.id,
         gameTitle: game.title,
         packageLabel: activePack.label,
-        playerId: playerId.trim(),
-        zoneId: game.requiresZoneId ? zoneId.trim() : undefined,
+        playerId: resolved.playerId,
+        zoneId: resolved.zoneId,
+        targetPayload: resolved.targetPayload,
         amountUsd: finalPrice,
         paymentMethod: methodName,
         referenceCode: !usedWallet ? referenceCode.trim() || undefined : undefined,
@@ -237,29 +314,110 @@ export function QuickTopUpModal({
               <label className="nc-step-title">
                 <span className="nc-step-num">1</span>
                 <UserCheck size={15} />
-                Ingresa tu {game.inputLabel}
+                {dynamicSchema ? 'Datos requeridos de tu cuenta' : `Ingresa tu ${game.inputLabel}`}
               </label>
 
-              <div className={`nc-input-row ${game.requiresZoneId ? 'has-zone' : ''}`}>
-                <input
-                  type="text"
-                  required
-                  value={playerId}
-                  onChange={(e) => setPlayerId(e.target.value)}
-                  placeholder={game.inputPlaceholder}
-                  className="nc-input"
-                />
-                {game.requiresZoneId && (
+              {dynamicSchema ? (
+                <div className={`nc-input-row ${dynamicSchema.length > 1 ? 'has-zone' : ''}`}>
+                  {dynamicSchema.map((field) =>
+                    field.type === 'select' && field.options && field.options.length > 0 ? (
+                      <select
+                        key={field.key}
+                        required={field.required}
+                        value={targetValues[field.key] ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTargetValues((prev) => ({ ...prev, [field.key]: val }));
+                          setPlayerValidation(null);
+                        }}
+                        className="nc-input"
+                        aria-label={field.label}
+                      >
+                        <option value="">{field.placeholder || `Selecciona ${field.label}`}</option>
+                        {field.options.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        key={field.key}
+                        type={field.type === 'email' ? 'email' : 'text'}
+                        required={field.required}
+                        value={targetValues[field.key] ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTargetValues((prev) => ({ ...prev, [field.key]: val }));
+                          setPlayerValidation(null);
+                        }}
+                        placeholder={field.placeholder || field.label}
+                        className="nc-input"
+                        aria-label={field.label}
+                      />
+                    )
+                  )}
+                </div>
+              ) : (
+                <div className={`nc-input-row ${game.requiresZoneId ? 'has-zone' : ''}`}>
                   <input
                     type="text"
                     required
-                    value={zoneId}
-                    onChange={(e) => setZoneId(e.target.value)}
-                    placeholder={game.zonePlaceholder}
+                    value={playerId}
+                    onChange={(e) => {
+                      setPlayerId(e.target.value);
+                      setPlayerValidation(null);
+                    }}
+                    placeholder={game.inputPlaceholder}
                     className="nc-input"
                   />
-                )}
-              </div>
+                  {game.requiresZoneId && (
+                    <input
+                      type="text"
+                      required
+                      value={zoneId}
+                      onChange={(e) => {
+                        setZoneId(e.target.value);
+                        setPlayerValidation(null);
+                      }}
+                      placeholder={game.zonePlaceholder}
+                      className="nc-input"
+                    />
+                  )}
+                </div>
+              )}
+
+              {(game.category === 'topup' || activePack.requiresTarget) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="nc-btn nc-btn-ghost nc-btn-sm"
+                    disabled={validatingPlayer || !resolveTargetSubmission().playerId}
+                    onClick={handleValidatePlayer}
+                  >
+                    {validatingPlayer ? 'Verificando...' : 'Verificar ID'}
+                  </button>
+                  {playerValidation && (
+                    <span
+                      style={{
+                        fontSize: '0.78rem',
+                        color:
+                          playerValidation.status === 'valid'
+                            ? '#86efac'
+                            : playerValidation.status === 'invalid'
+                              ? '#fca5a5'
+                              : '#cbd5e1'
+                      }}
+                    >
+                      {playerValidation.status === 'valid'
+                        ? `Cuenta válida${playerValidation.playerName ? `: ${playerValidation.playerName}` : ''}`
+                        : playerValidation.status === 'invalid'
+                          ? 'ID no encontrado para este juego'
+                          : 'Verificación automática no disponible para este SKU'}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="nc-step-block">
@@ -272,12 +430,15 @@ export function QuickTopUpModal({
               <div className="nc-pack-grid">
                 {game.packages.map((pack) => {
                   const isSelected = pack.id === activePack.id;
+                  const outOfStock = pack.inStock === false;
                   const price = isResellerMode ? pack.resellerPriceUsd : pack.publicPriceUsd;
                   return (
                     <button
                       key={pack.id}
                       type="button"
+                      disabled={outOfStock}
                       className={`nc-pack-item ${isSelected ? 'is-selected' : ''} ${pack.imageUrl ? 'has-media' : ''}`}
+                      style={outOfStock ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                       onClick={() => setSelectedPackId(pack.id)}
                     >
                       {pack.imageUrl && (
@@ -288,7 +449,11 @@ export function QuickTopUpModal({
                       <div className="nc-pack-content">
                         <div className="nc-pack-top">
                           <span className="nc-pack-name">{pack.label}</span>
-                          {pack.bonus && <span className="nc-pack-bonus">{pack.bonus}</span>}
+                          {outOfStock ? (
+                            <span className="nc-pack-bonus">Sin stock</span>
+                          ) : (
+                            pack.bonus && <span className="nc-pack-bonus">{pack.bonus}</span>
+                          )}
                         </div>
                         <span className="nc-mono nc-pack-price">${price.toFixed(2)} USD</span>
                       </div>

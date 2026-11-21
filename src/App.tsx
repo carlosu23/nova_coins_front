@@ -187,9 +187,12 @@ export function App() {
     showToast('Atención directa Ecuador (+593) para pagos y soporte.');
   };
 
-  const handleTopUpWallet = async (amountUsd: number) => {
+  const handleTopUpWallet = async (
+    amountUsd: number,
+    options?: { paymentMethod?: string; referenceCode?: string; proofImage?: string }
+  ) => {
     try {
-      const res = await topUpWalletRequest(amountUsd);
+      const res = await topUpWalletRequest(amountUsd, options);
       setCurrentUser(res.user);
       showToast(
         `Solicitud de fondeo ${res.order.id} ($${amountUsd.toFixed(2)} USD) enviada para validación.`
@@ -203,6 +206,7 @@ export function App() {
     gameTitle: string;
     playerId: string;
     zoneId?: string;
+    targetPayload?: Record<string, string>;
     accountName?: string;
     whatsapp?: string;
   }) => {
@@ -222,9 +226,10 @@ export function App() {
       `Juego: ${order.gameTitle}`,
       `Paquete: ${order.packageLabel}`,
       `ID Jugador: ${order.playerId}`,
+      ...(order.codes && order.codes.length > 0 ? [`PIN / Códigos: ${order.codes.join(', ')}`] : []),
       `Estado: ${order.status}`
     ].join('\n');
-    navigator.clipboard?.writeText(receipt).catch(() => { });
+    navigator.clipboard?.writeText(receipt).catch(() => {});
     showToast(`Comprobante ${order.id} copiado para tu cliente.`);
   };
 
@@ -234,6 +239,7 @@ export function App() {
     packageLabel: string;
     playerId: string;
     zoneId?: string;
+    targetPayload?: Record<string, string>;
     accountName?: string;
     whatsapp?: string;
     amountUsd: number;
@@ -392,6 +398,8 @@ export function App() {
           user={currentUser}
           onClose={() => setProfileModalOpen(false)}
           onTopUpWallet={handleTopUpWallet}
+          onUserUpdated={(u) => setCurrentUser(u)}
+          onNotify={showToast}
           onLogout={() => {
             clearStoredToken();
             setCurrentUser(null);
