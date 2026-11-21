@@ -1,8 +1,8 @@
 import { io, type Socket } from 'socket.io-client';
-import { type UserProfile } from '../data/mockUser';
+import { API_BASE, SOCKET_URL } from '../config/env';
+import { type GameItem } from '../data/catalog';
+import { type UserApiKey, type UserOrder, type UserProfile } from '../types/user';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
-const SOCKET_URL = API_BASE.replace(/\/api\/?$/, '');
 const TOKEN_KEY = 'nc_token';
 
 export interface MarginOverride {
@@ -11,11 +11,48 @@ export interface MarginOverride {
   resellerPriceUsd: number;
 }
 
+export interface PublicPaymentChannel {
+  id: string;
+  name: string;
+  accountDetail: string;
+  priority: string;
+  qrImage?: string;
+}
+
+export interface HeroBannerSlide {
+  id: string;
+  tagLeft: string;
+  tagRight: string;
+  title: string;
+  accentWord: string;
+  subtitle: string;
+  ctaLabel: string;
+  action: 'game' | 'catalog';
+  targetGameId?: string;
+  badgeIcon: 'zap' | 'sparkles';
+  backgroundImage?: string;
+  sideHighlightTitle: string;
+  sideHighlightValue: string;
+  sideHighlightNote: string;
+}
+
 export function createUserSocket(token?: string | null): Socket {
   return io(SOCKET_URL, {
     auth: token ? { token } : {},
-    transports: ['websocket', 'polling']
+    transports: ['websocket']
   });
+}
+
+export function fetchCatalog(): Promise<{ games: GameItem[] }> {
+  return apiRequest('/catalog');
+}
+
+export function fetchActiveChannels(): Promise<{ channels: PublicPaymentChannel[] }> {
+  return apiRequest('/catalog/channels');
+}
+
+export function fetchHeroBanners(): Promise<{ banners: HeroBannerSlide[] }> {
+  return apiRequest('/catalog/hero-banners');
 }
 
 export function fetchCatalogMargins(): Promise<{ margins: MarginOverride[] }> {
@@ -82,10 +119,20 @@ export async function fetchCurrentUser(): Promise<{ user: UserProfile }> {
   return apiRequest('/auth/me');
 }
 
-export async function topUpWalletRequest(amountUsd: number): Promise<{ user: UserProfile }> {
+export async function topUpWalletRequest(
+  amountUsd: number,
+  options?: { paymentMethod?: string; referenceCode?: string }
+): Promise<{
+  user: UserProfile;
+  order: { id: string; amountUsd: number; status: string };
+}> {
   return apiRequest('/wallet/topup', {
     method: 'POST',
-    body: JSON.stringify({ amountUsd })
+    body: JSON.stringify({
+      amountUsd,
+      paymentMethod: options?.paymentMethod,
+      referenceCode: options?.referenceCode
+    })
   });
 }
 
@@ -103,6 +150,7 @@ export async function savePlayerIdRequest(payload: {
 }
 
 export async function createOrderRequest(payload: {
+  packageId?: string;
   gameTitle: string;
   packageLabel: string;
   playerId: string;
@@ -111,11 +159,48 @@ export async function createOrderRequest(payload: {
   whatsapp?: string;
   amountUsd: number;
   paymentMethod: string;
+  referenceCode?: string;
+  proofImage?: string;
   usedWallet: boolean;
-}): Promise<{ user: UserProfile }> {
+}): Promise<{ user: UserProfile; order: UserOrder }> {
   return apiRequest('/orders', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
 }
 
+export async function submitResellerApplicationRequest(payload: {
+  fullName: string;
+  businessName?: string;
+  email: string;
+  phone: string;
+  monthlyVolume: string;
+  message?: string;
+}): Promise<{ referenceCode: string; status: string }> {
+  return apiRequest('/reseller-applications', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchApiKeysRequest(): Promise<{ apiKeys: UserApiKey[] }> {
+  return apiRequest('/api-keys');
+}
+
+export async function createApiKeyRequest(payload: {
+  name: string;
+  environment: 'production' | 'sandbox';
+  scopes: string[];
+  allowedIps?: string;
+}): Promise<{ plainKey: string; apiKey: UserApiKey }> {
+  return apiRequest('/api-keys', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function revokeApiKeyRequest(id: string): Promise<{ ok: boolean }> {
+  return apiRequest(`/api-keys/${id}`, {
+    method: 'DELETE'
+  });
+}

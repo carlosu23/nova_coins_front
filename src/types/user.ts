@@ -1,3 +1,18 @@
+export type PanelSection = 'overview' | 'catalog' | 'calculator' | 'clients' | 'orders' | 'apikeys';
+
+export interface UserApiKey {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  environment: 'production' | 'sandbox';
+  scopes: string[];
+  allowedIps: string;
+  active: boolean;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
 export interface SavedPlayerId {
   id: string;
   gameTitle: string;
@@ -7,6 +22,8 @@ export interface SavedPlayerId {
   whatsapp?: string;
 }
 
+export type OrderStatus = 'Completado' | 'Aprobado' | 'Pendiente' | 'Rechazado' | 'En proceso';
+
 export interface UserOrder {
   id: string;
   gameTitle: string;
@@ -14,7 +31,8 @@ export interface UserOrder {
   playerId: string;
   amountUsd: number;
   paymentMethod: string;
-  status: 'Completado' | 'En proceso';
+  status: OrderStatus;
+  createdAt?: string;
   dateLabel: string;
 }
 

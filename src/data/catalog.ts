@@ -32,14 +32,6 @@ export interface GameItem {
   packages: GamePackage[];
 }
 
-export interface PaymentMethodItem {
-  id: 'wallet' | 'binance' | 'ecuador';
-  name: string;
-  subtitle: string;
-  badge: string;
-  modeTag: string;
-}
-
 export const INITIAL_CATALOG: GameItem[] = [
   {
     id: 'free-fire',
@@ -267,37 +259,4 @@ export const INITIAL_CATALOG: GameItem[] = [
     ]
   }
 ];
-
-export const PAYMENT_METHODS: PaymentMethodItem[] = [
-  {
-    id: 'wallet',
-    name: 'Billetera Nova USD',
-    subtitle: 'Compra en 1 clic sin pasarela',
-    badge: '0% Comisión',
-    modeTag: 'Prepago'
-  },
-  {
-    id: 'binance',
-    name: 'Binance Pay',
-    subtitle: 'USDT / USDC paridad 1:1 USD',
-    badge: 'Automático',
-    modeTag: 'Instantáneo'
-  },
-  {
-    id: 'ecuador',
-    name: 'Deuna! y Banca Ecuador',
-    subtitle: 'Pichincha, Guayaquil, Produbanco',
-    badge: 'Auto / Manual',
-    modeTag: 'Local EC'
-  }
-];
-
-export const ECUADOR_TRUST_CHANNELS = [
-  { name: 'Binance Pay', detail: 'USDT/USDC 1:1', tone: 'gold' },
-  { name: 'Deuna!', detail: 'QR Instantáneo', tone: 'purple' },
-  { name: 'Banco Pichincha', detail: 'Transferencia', tone: 'gold' },
-  { name: 'Banco Guayaquil', detail: 'Transferencia', tone: 'magenta' },
-  { name: 'Produbanco', detail: 'Transferencia', tone: 'cyan' },
-  { name: 'Billetera USD', detail: 'Saldo Prepago 1-Clic', tone: 'purple' }
-] as const;
 

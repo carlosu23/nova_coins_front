@@ -1,30 +1,16 @@
 import { ChevronLeft, ChevronRight, Sparkles, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { type GameItem } from '../data/catalog';
+import { createUserSocket, fetchHeroBanners, type HeroBannerSlide } from '../services/api';
 import { NovaLogo } from './NovaLogo';
 
 interface HeroCarouselProps {
   featuredGame: GameItem;
+  allGames: GameItem[];
   onQuickSelectGame: (game: GameItem) => void;
 }
 
-interface BannerSlide {
-  id: string;
-  tagLeft: string;
-  tagRight: string;
-  title: string;
-  accentWord: string;
-  subtitle: string;
-  ctaLabel: string;
-  action: 'game' | 'catalog';
-  badgeIcon: 'zap' | 'sparkles';
-  backgroundImage?: string;
-  sideHighlightTitle: string;
-  sideHighlightValue: string;
-  sideHighlightNote: string;
-}
-
-const SLIDES: BannerSlide[] = [
+const DEFAULT_SLIDES: HeroBannerSlide[] = [
   {
     id: 'slide-topup',
     tagLeft: 'NOVA COINS',
@@ -72,23 +58,49 @@ const SLIDES: BannerSlide[] = [
   }
 ];
 
-export function HeroCarousel({ featuredGame, onQuickSelectGame }: HeroCarouselProps) {
+export function HeroCarousel({ featuredGame, allGames, onQuickSelectGame }: HeroCarouselProps) {
+  const [slides, setSlides] = useState<HeroBannerSlide[]>(DEFAULT_SLIDES);
   const [activeIndex, setActiveIndex] = useState(0);
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (paused) {
+    fetchHeroBanners()
+      .then((res) => {
+        if (res.banners && res.banners.length > 0) {
+          setSlides(res.banners);
+          setActiveIndex(0);
+        }
+      })
+      .catch(() => {});
+
+    const socket = createUserSocket();
+    socket.on('catalog:heroBanners', (payload: { banners: HeroBannerSlide[] }) => {
+      if (payload?.banners && payload.banners.length > 0) {
+        setSlides(payload.banners);
+        setActiveIndex(0);
+      }
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (paused || slides.length <= 1) {
       return;
     }
     const timer = window.setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % SLIDES.length);
+      setActiveIndex((prev) => (prev + 1) % slides.length);
     }, 6000);
     return () => window.clearInterval(timer);
-  }, [paused]);
+  }, [paused, slides.length]);
 
-  const handleSlideAction = (slide: BannerSlide) => {
+  const handleSlideAction = (slide: HeroBannerSlide) => {
     if (slide.action === 'game') {
-      onQuickSelectGame(featuredGame);
+      const target =
+        (slide.targetGameId ? allGames.find((g) => g.id === slide.targetGameId) : null) ??
+        featuredGame;
+      onQuickSelectGame(target);
       return;
     }
     document.getElementById('tienda')?.scrollIntoView({ behavior: 'smooth' });
@@ -107,7 +119,7 @@ export function HeroCarousel({ featuredGame, onQuickSelectGame }: HeroCarouselPr
             className="nc-banner-track"
             style={{ transform: `translate3d(-${activeIndex * 100}%, 0, 0)` }}
           >
-            {SLIDES.map((slide, idx) => (
+            {slides.map((slide, idx) => (
               <div
                 key={slide.id}
                 className={`nc-banner-slide ${idx === activeIndex ? 'is-active' : ''} ${slide.backgroundImage ? 'has-bg-art' : ''}`}
@@ -155,8 +167,8 @@ export function HeroCarousel({ featuredGame, onQuickSelectGame }: HeroCarouselPr
                       <div className="nc-banner-pay-strip">
                         <span>Binance Pay</span>
                         <span>Deuna!</span>
-                        <span>Pichincha</span>
-                        <span>Guayaquil</span>
+                        <span>Banca Ecuador</span>
+                        <span>Billetera USD</span>
                       </div>
                     </div>
                   </div>
@@ -188,7 +200,7 @@ export function HeroCarousel({ featuredGame, onQuickSelectGame }: HeroCarouselPr
           <button
             type="button"
             className="nc-carousel-arrow is-prev"
-            onClick={() => setActiveIndex((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)}
+            onClick={() => setActiveIndex((prev) => (prev - 1 + slides.length) % slides.length)}
             aria-label="Banner anterior"
           >
             <ChevronLeft size={20} />
@@ -197,7 +209,7 @@ export function HeroCarousel({ featuredGame, onQuickSelectGame }: HeroCarouselPr
           <button
             type="button"
             className="nc-carousel-arrow is-next"
-            onClick={() => setActiveIndex((prev) => (prev + 1) % SLIDES.length)}
+            onClick={() => setActiveIndex((prev) => (prev + 1) % slides.length)}
             aria-label="Siguiente banner"
           >
             <ChevronRight size={20} />
@@ -205,7 +217,7 @@ export function HeroCarousel({ featuredGame, onQuickSelectGame }: HeroCarouselPr
         </div>
 
         <div className="nc-carousel-dots" role="tablist" aria-label="Diapositivas del banner">
-          {SLIDES.map((slide, idx) => (
+          {slides.map((slide, idx) => (
             <button
               key={slide.id}
               type="button"

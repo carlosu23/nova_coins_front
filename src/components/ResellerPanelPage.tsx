@@ -7,6 +7,7 @@ import {
   Copy,
   Crown,
   Gamepad2,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   MessageCircle,
@@ -21,10 +22,9 @@ import {
   Zap
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { type GameItem, type GamePackage, INITIAL_CATALOG } from '../data/catalog';
-import { type UserOrder, type UserProfile } from '../data/mockUser';
-
-export type PanelSection = 'overview' | 'catalog' | 'calculator' | 'clients' | 'orders';
+import { type GameItem, type GamePackage } from '../data/catalog';
+import { type PanelSection, type UserOrder, type UserProfile } from '../types/user';
+import { ApiKeysManager } from './ApiKeysManager';
 
 interface SkuProductItem {
   game: GameItem;
@@ -33,12 +33,14 @@ interface SkuProductItem {
 
 interface ResellerPanelPageProps {
   user: UserProfile;
+  catalog: GameItem[];
   activeSection: PanelSection;
   onSectionChange: (section: PanelSection) => void;
   onBackHome: () => void;
   onLogout: () => void;
   onTopUpWallet: (amountUsd: number) => void;
   onExecuteB2BSale: (payload: {
+    packageId: string;
     gameTitle: string;
     packageLabel: string;
     playerId: string;
@@ -48,7 +50,7 @@ interface ResellerPanelPageProps {
     amountUsd: number;
     paymentMethod: string;
     usedWallet: boolean;
-  }) => void;
+  }) => Promise<UserOrder>;
   onAddSavedId: (payload: {
     gameTitle: string;
     playerId: string;
@@ -59,22 +61,11 @@ interface ResellerPanelPageProps {
   onCopyReceipt: (order: UserOrder) => void;
 }
 
-const WEEKLY_METRICS = [
-  { day: 'Lun', volume: 38, pct: 46 },
-  { day: 'Mar', volume: 54, pct: 65 },
-  { day: 'Mié', volume: 42, pct: 51 },
-  { day: 'Jue', volume: 71, pct: 86 },
-  { day: 'Vie', volume: 82, pct: 100 },
-  { day: 'Sáb', volume: 64, pct: 78 },
-  { day: 'Dom', volume: 49, pct: 60 }
-];
-
-const ALL_SKUS: SkuProductItem[] = INITIAL_CATALOG.flatMap((game) =>
-  game.packages.map((pack) => ({ game, pack }))
-);
+const WEEKDAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 export function ResellerPanelPage({
   user,
+  catalog,
   activeSection: section,
   onSectionChange: setSection,
   onBackHome,
@@ -84,6 +75,11 @@ export function ResellerPanelPage({
   onAddSavedId,
   onCopyReceipt
 }: ResellerPanelPageProps) {
+  const allSkus = useMemo<SkuProductItem[]>(
+    () => catalog.flatMap((game) => game.packages.map((pack) => ({ game, pack }))),
+    [catalog]
+  );
+
   const [panelSearch, setPanelSearch] = useState('');
   const [gameFilter, setGameFilter] = useState<string>('all');
   const [fundAmount, setFundAmount] = useState('');
@@ -92,11 +88,14 @@ export function ResellerPanelPage({
   const [saleZoneId, setSaleZoneId] = useState('');
   const [saleAccountName, setSaleAccountName] = useState('');
   const [saleWhatsapp, setSaleWhatsapp] = useState('');
+  const [submittingSale, setSubmittingSale] = useState(false);
   const [lastCompletedOrder, setLastCompletedOrder] = useState<UserOrder | null>(null);
-  const [calcGameId, setCalcGameId] = useState(INITIAL_CATALOG[0].id);
-  const [calcPackId, setCalcPackId] = useState(INITIAL_CATALOG[0].packages[1].id);
+  const [calcGameId, setCalcGameId] = useState(catalog[0]?.id ?? '');
+  const [calcPackId, setCalcPackId] = useState(
+    catalog[0]?.packages[1]?.id ?? catalog[0]?.packages[0]?.id ?? ''
+  );
   const [customSalePrice, setCustomSalePrice] = useState('');
-  const [newIdGame, setNewIdGame] = useState(INITIAL_CATALOG[0].title);
+  const [newIdGame, setNewIdGame] = useState(catalog[0]?.title ?? '');
   const [newPlayerId, setNewPlayerId] = useState('');
   const [newZoneId, setNewZoneId] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
@@ -106,7 +105,7 @@ export function ResellerPanelPage({
   const normalizedQuery = panelSearch.trim().toLowerCase();
 
   const filteredSkus = useMemo(() => {
-    return ALL_SKUS.filter(({ game, pack }) => {
+    return allSkus.filter(({ game, pack }) => {
       const matchesGame = gameFilter === 'all' || game.id === gameFilter;
       const matchesQuery =
         !normalizedQuery ||
@@ -116,7 +115,7 @@ export function ResellerPanelPage({
         game.currencyName.toLowerCase().includes(normalizedQuery);
       return matchesGame && matchesQuery;
     });
-  }, [gameFilter, normalizedQuery]);
+  }, [allSkus, gameFilter, normalizedQuery]);
 
   const filteredClients = useMemo(() => {
     if (!normalizedQuery) {
@@ -144,8 +143,45 @@ export function ResellerPanelPage({
     );
   }, [user.recentOrders, normalizedQuery]);
 
-  const selectedCalcGame =
-    INITIAL_CATALOG.find((g) => g.id === calcGameId) ?? INITIAL_CATALOG[0];
+  const weeklyMetrics = useMemo(() => {
+    const today = new Date();
+    const days: { key: string; day: string; volume: number }[] = [];
+    const byKey = new Map<string, { key: string; day: string; volume: number }>();
+
+    for (let offset = 6; offset >= 0; offset -= 1) {
+      const d = new Date(today);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - offset);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const entry = { key, day: WEEKDAY_LABELS[d.getDay()], volume: 0 };
+      days.push(entry);
+      byKey.set(key, entry);
+    }
+
+    for (const order of user.recentOrders) {
+      if (order.status === 'Rechazado' || order.gameTitle === 'Fondeo de Billetera USD') {
+        continue;
+      }
+      if (!order.createdAt) {
+        continue;
+      }
+      const d = new Date(order.createdAt);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      const bucket = byKey.get(key);
+      if (bucket) {
+        bucket.volume = Number((bucket.volume + order.amountUsd).toFixed(2));
+      }
+    }
+
+    const maxVol = Math.max(...days.map((d) => d.volume), 0);
+    return days.map((d) => ({
+      day: d.day,
+      volume: d.volume,
+      pct: maxVol > 0 ? Math.max(8, Math.round((d.volume / maxVol) * 100)) : 0
+    }));
+  }, [user.recentOrders]);
+
+  const selectedCalcGame = catalog.find((g) => g.id === calcGameId) ?? catalog[0];
   const selectedCalcPack =
     selectedCalcGame.packages.find((p) => p.id === calcPackId) ?? selectedCalcGame.packages[0];
 
@@ -158,8 +194,31 @@ export function ResellerPanelPage({
   const netProfit = effectiveSalePrice - wholesaleCost;
   const marginPct = wholesaleCost > 0 ? Math.round((netProfit / wholesaleCost) * 100) : 0;
 
-  const totalSpent = user.recentOrders.reduce((sum, ord) => sum + ord.amountUsd, 0);
-  const estimatedProfit = Number((totalSpent * 0.16).toFixed(2));
+  const completedSalesOrders = useMemo(
+    () =>
+      user.recentOrders.filter(
+        (ord) =>
+          ord.gameTitle !== 'Fondeo de Billetera USD' &&
+          (ord.status === 'Completado' || ord.status === 'Aprobado')
+      ),
+    [user.recentOrders]
+  );
+
+  const totalSpent = completedSalesOrders.reduce((sum, ord) => sum + ord.amountUsd, 0);
+
+  const estimatedProfit = useMemo(() => {
+    const publicPriceMap = new Map(
+      allSkus.map(({ game, pack }) => [`${game.title}::${pack.label}`, pack.publicPriceUsd])
+    );
+    const total = completedSalesOrders.reduce((sum, ord) => {
+      const suggestedPublic = publicPriceMap.get(`${ord.gameTitle}::${ord.packageLabel}`);
+      if (suggestedPublic === undefined) {
+        return sum;
+      }
+      return sum + Math.max(0, suggestedPublic - ord.amountUsd);
+    }, 0);
+    return Number(total.toFixed(2));
+  }, [allSkus, completedSalesOrders]);
 
   const initials = user.fullName
     .split(' ')
@@ -175,6 +234,7 @@ export function ResellerPanelPage({
       return;
     }
     onTopUpWallet(Number(parsed.toFixed(2)));
+    setFundAmount('');
   };
 
   const handleStartSkuSale = (item: SkuProductItem) => {
@@ -187,42 +247,40 @@ export function ResellerPanelPage({
     setSaleWhatsapp(saved?.whatsapp ?? '');
   };
 
-  const handleConfirmB2BSale = (e: React.FormEvent) => {
+  const handleConfirmB2BSale = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeSku || !salePlayerId.trim()) {
+    if (!activeSku || !salePlayerId.trim() || submittingSale) {
       return;
     }
     const cleanPlayer = salePlayerId.trim();
     const cleanZone = activeSku.game.requiresZoneId ? saleZoneId.trim() : undefined;
-    const displayId = cleanZone ? `${cleanPlayer} (${cleanZone})` : cleanPlayer;
 
-    onExecuteB2BSale({
-      gameTitle: activeSku.game.title,
-      packageLabel: activeSku.pack.label,
-      playerId: cleanPlayer,
-      zoneId: cleanZone || undefined,
-      accountName: saleAccountName.trim() || undefined,
-      whatsapp: saleWhatsapp.trim() || undefined,
-      amountUsd: activeSku.pack.resellerPriceUsd,
-      paymentMethod: 'Billetera Nova USD',
-      usedWallet: true
-    });
+    setSubmittingSale(true);
+    try {
+      const created = await onExecuteB2BSale({
+        packageId: activeSku.pack.id,
+        gameTitle: activeSku.game.title,
+        packageLabel: activeSku.pack.label,
+        playerId: cleanPlayer,
+        zoneId: cleanZone || undefined,
+        accountName: saleAccountName.trim() || undefined,
+        whatsapp: saleWhatsapp.trim() || undefined,
+        amountUsd: activeSku.pack.resellerPriceUsd,
+        paymentMethod: 'Billetera Nova USD',
+        usedWallet: true
+      });
 
-    setLastCompletedOrder({
-      id: `ord-${Date.now().toString().slice(-4)}`,
-      gameTitle: activeSku.game.title,
-      packageLabel: activeSku.pack.label,
-      playerId: displayId,
-      amountUsd: activeSku.pack.resellerPriceUsd,
-      paymentMethod: 'Billetera Nova USD',
-      status: 'Completado',
-      dateLabel: 'Ahora'
-    });
-    setActiveSku(null);
-    setSalePlayerId('');
-    setSaleZoneId('');
-    setSaleAccountName('');
-    setSaleWhatsapp('');
+      setLastCompletedOrder(created);
+      setActiveSku(null);
+      setSalePlayerId('');
+      setSaleZoneId('');
+      setSaleAccountName('');
+      setSaleWhatsapp('');
+    } catch {
+      // Error toast handled by parent
+    } finally {
+      setSubmittingSale(false);
+    }
   };
 
   const handleSaveClientId = (e: React.FormEvent) => {
@@ -274,7 +332,7 @@ export function ResellerPanelPage({
       <div className="nc-b2b-cards-grid">
         {items.map(({ game, pack }) => {
           const diff = pack.publicPriceUsd - pack.resellerPriceUsd;
-          const pct = Math.round((diff / pack.publicPriceUsd) * 100);
+          const pct = pack.publicPriceUsd > 0 ? Math.round((diff / pack.publicPriceUsd) * 100) : 0;
           const isSelected = activeSku?.pack.id === pack.id;
           return (
             <article
@@ -401,6 +459,15 @@ export function ResellerPanelPage({
               <Receipt size={17} />
               <span>Ventas y Recibos</span>
             </button>
+
+            <button
+              type="button"
+              className={`nc-b2b-nav-item ${section === 'apikeys' ? 'is-active' : ''}`}
+              onClick={() => setSection('apikeys')}
+            >
+              <KeyRound size={17} />
+              <span>API Keys</span>
+            </button>
           </nav>
 
           <div className="nc-b2b-sidebar-footer">
@@ -480,7 +547,7 @@ export function ResellerPanelPage({
               <Users size={18} className="nc-kpi-purple" />
               <div>
                 <span>Paquetes Disponibles</span>
-                <strong className="nc-mono">{ALL_SKUS.length}</strong>
+                <strong className="nc-mono">{allSkus.length}</strong>
               </div>
             </div>
           </div>
@@ -543,9 +610,9 @@ export function ResellerPanelPage({
                     ${activeSku.pack.resellerPriceUsd.toFixed(2)} USD
                   </strong>
                 </div>
-                <button type="submit" className="nc-btn nc-btn-gold">
+                <button type="submit" disabled={submittingSale} className="nc-btn nc-btn-gold">
                   <Zap size={16} />
-                  <span>Ejecutar Recarga</span>
+                  <span>{submittingSale ? 'Procesando...' : 'Ejecutar Recarga'}</span>
                 </button>
               </div>
             </form>
@@ -557,7 +624,7 @@ export function ResellerPanelPage({
                 <CheckCircle2 size={20} className="nc-kpi-green" />
                 <div>
                   <strong>
-                    Recarga ejecutada: {lastCompletedOrder.gameTitle} ·{' '}
+                    Recarga ejecutada ({lastCompletedOrder.id}): {lastCompletedOrder.gameTitle} ·{' '}
                     {lastCompletedOrder.packageLabel}
                   </strong>
                   <span>
@@ -590,7 +657,7 @@ export function ResellerPanelPage({
                   >
                     Todos
                   </button>
-                  {INITIAL_CATALOG.map((g) => (
+                  {catalog.map((g) => (
                     <button
                       key={g.id}
                       type="button"
@@ -613,7 +680,7 @@ export function ResellerPanelPage({
                 <div className="nc-panel-card-head">
                   <h2>
                     <BarChart3 size={17} />
-                    <span>Ventas de la Semana (USD)</span>
+                    <span>Ventas de los Últimos 7 Días (USD)</span>
                   </h2>
                   <span className="nc-b2b-api-status">
                     <span className="nc-pulse-dot" />
@@ -621,9 +688,9 @@ export function ResellerPanelPage({
                   </span>
                 </div>
                 <div className="nc-b2b-chart">
-                  {WEEKLY_METRICS.map((item) => (
+                  {weeklyMetrics.map((item) => (
                     <div key={item.day} className="nc-chart-col">
-                      <span className="nc-chart-val nc-mono">${item.volume}</span>
+                      <span className="nc-chart-val nc-mono">${item.volume.toFixed(2)}</span>
                       <div className="nc-chart-track">
                         <div className="nc-chart-bar" style={{ height: `${item.pct}%` }} />
                       </div>
@@ -641,7 +708,7 @@ export function ResellerPanelPage({
                     className="nc-text-link"
                     onClick={() => setSection('catalog')}
                   >
-                    Ver todos ({ALL_SKUS.length})
+                    Ver todos ({allSkus.length})
                   </button>
                 </div>
                 {renderSkuCards(filteredSkus.filter((s) => s.pack.popular).slice(0, 6))}
@@ -670,14 +737,13 @@ export function ResellerPanelPage({
                       value={calcGameId}
                       onChange={(e) => {
                         const nextGame =
-                          INITIAL_CATALOG.find((g) => g.id === e.target.value) ??
-                          INITIAL_CATALOG[0];
+                          catalog.find((g) => g.id === e.target.value) ?? catalog[0];
                         setCalcGameId(nextGame.id);
                         setCalcPackId(nextGame.packages[0].id);
                         setCustomSalePrice('');
                       }}
                     >
-                      {INITIAL_CATALOG.map((g) => (
+                      {catalog.map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.title}
                         </option>
@@ -762,7 +828,7 @@ export function ResellerPanelPage({
                   className="nc-input"
                   aria-label="Juego del cliente"
                 >
-                  {INITIAL_CATALOG.map((g) => (
+                  {catalog.map((g) => (
                     <option key={g.id} value={g.title}>
                       {g.title}
                     </option>
@@ -806,50 +872,53 @@ export function ResellerPanelPage({
               </form>
 
               <div className="nc-profile-list">
-                {filteredClients.map((item) => (
-                  <div key={item.id} className="nc-profile-row-card">
-                    <div>
-                      <strong>
-                        {item.accountName ? `${item.accountName} · ` : ''}
-                        {item.gameTitle}
-                      </strong>
-                      <span className="nc-mono">
-                        ID: {item.playerId}
-                        {item.zoneId ? ` · Zone ${item.zoneId}` : ''}
-                      </span>
-                      {item.whatsapp && (
-                        <a
-                          href={`https://wa.me/${item.whatsapp.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="nc-client-wa-link"
-                        >
-                          <MessageCircle size={12} />
-                          <span className="nc-mono">{item.whatsapp}</span>
-                        </a>
-                      )}
+                {filteredClients.length === 0 ? (
+                  <p className="nc-profile-empty">Aún no tienes IDs de clientes guardados.</p>
+                ) : (
+                  filteredClients.map((item) => (
+                    <div key={item.id} className="nc-profile-row-card">
+                      <div>
+                        <strong>
+                          {item.accountName ? `${item.accountName} · ` : ''}
+                          {item.gameTitle}
+                        </strong>
+                        <span className="nc-mono">
+                          ID: {item.playerId}
+                          {item.zoneId ? ` · Zone ${item.zoneId}` : ''}
+                        </span>
+                        {item.whatsapp && (
+                          <a
+                            href={`https://wa.me/${item.whatsapp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="nc-client-wa-link"
+                          >
+                            <MessageCircle size={12} />
+                            <span className="nc-mono">{item.whatsapp}</span>
+                          </a>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="nc-btn nc-btn-gold nc-btn-sm"
+                        onClick={() => {
+                          const matchedGame =
+                            catalog.find((g) => g.title === item.gameTitle) ?? catalog[0];
+                          const matchedPack =
+                            matchedGame.packages.find((p) => p.popular) ?? matchedGame.packages[0];
+                          handleStartSkuSale({ game: matchedGame, pack: matchedPack });
+                          setSalePlayerId(item.playerId);
+                          setSaleZoneId(item.zoneId ?? '');
+                          setSaleAccountName(item.accountName ?? '');
+                          setSaleWhatsapp(item.whatsapp ?? '');
+                          setSection('catalog');
+                        }}
+                      >
+                        Recargar
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="nc-btn nc-btn-gold nc-btn-sm"
-                      onClick={() => {
-                        const matchedGame =
-                          INITIAL_CATALOG.find((g) => g.title === item.gameTitle) ??
-                          INITIAL_CATALOG[0];
-                        const matchedPack =
-                          matchedGame.packages.find((p) => p.popular) ?? matchedGame.packages[0];
-                        handleStartSkuSale({ game: matchedGame, pack: matchedPack });
-                        setSalePlayerId(item.playerId);
-                        setSaleZoneId(item.zoneId ?? '');
-                        setSaleAccountName(item.accountName ?? '');
-                        setSaleWhatsapp(item.whatsapp ?? '');
-                        setSection('catalog');
-                      }}
-                    >
-                      Recargar
-                    </button>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -864,30 +933,46 @@ export function ResellerPanelPage({
               </div>
 
               <div className="nc-profile-list">
-                {filteredOrders.map((order) => (
-                  <div key={order.id} className="nc-profile-row-card">
-                    <div>
-                      <strong>
-                        {order.gameTitle} · {order.packageLabel}
-                      </strong>
-                      <span>
-                        Orden {order.id} · ID: {order.playerId} · {order.dateLabel}
-                      </span>
+                {filteredOrders.length === 0 ? (
+                  <p className="nc-profile-empty">Aún no tienes ventas registradas.</p>
+                ) : (
+                  filteredOrders.map((order) => (
+                    <div key={order.id} className="nc-profile-row-card">
+                      <div>
+                        <strong>
+                          {order.gameTitle} · {order.packageLabel}
+                        </strong>
+                        <span>
+                          Orden {order.id} · ID: {order.playerId} · {order.status} · {order.dateLabel}
+                        </span>
+                      </div>
+                      <div className="nc-panel-order-actions">
+                        <strong className="nc-mono nc-price-gold">${order.amountUsd.toFixed(2)}</strong>
+                        <button
+                          type="button"
+                          className="nc-btn nc-btn-ghost nc-btn-sm"
+                          onClick={() => handleReceiptAction(order)}
+                        >
+                          {copiedOrderId === order.id ? <Check size={13} /> : <Copy size={13} />}
+                          <span>{copiedOrderId === order.id ? 'Copiado' : 'Comprobante'}</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="nc-panel-order-actions">
-                      <strong className="nc-mono nc-price-gold">${order.amountUsd.toFixed(2)}</strong>
-                      <button
-                        type="button"
-                        className="nc-btn nc-btn-ghost nc-btn-sm"
-                        onClick={() => handleReceiptAction(order)}
-                      >
-                        {copiedOrderId === order.id ? <Check size={13} /> : <Copy size={13} />}
-                        <span>{copiedOrderId === order.id ? 'Copiado' : 'Comprobante'}</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
+            </div>
+          )}
+
+          {section === 'apikeys' && (
+            <div className="nc-panel-card">
+              <div className="nc-panel-card-head">
+                <h2>
+                  <KeyRound size={17} />
+                  <span>API Keys para Integraciones</span>
+                </h2>
+              </div>
+              <ApiKeysManager />
             </div>
           )}
         </div>

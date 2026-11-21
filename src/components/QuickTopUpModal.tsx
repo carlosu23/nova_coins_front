@@ -1,34 +1,90 @@
-import { CheckCircle2, CreditCard, ShieldCheck, Sparkles, UserCheck, X, Zap } from 'lucide-react';
-import { useState } from 'react';
-import { type GameItem, type GamePackage, PAYMENT_METHODS } from '../data/catalog';
+import { CheckCircle2, CreditCard, ShieldCheck, Sparkles, Upload, UserCheck, X, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { type GameItem, type GamePackage } from '../data/catalog';
+import { createUserSocket, fetchActiveChannels, type PublicPaymentChannel } from '../services/api';
+import { type UserOrder } from '../types/user';
 
 interface QuickTopUpModalProps {
   game: GameItem | null;
+  isAuthenticated: boolean;
   isResellerMode: boolean;
   walletBalanceUsd?: number;
-  onOrderComplete?: (payload: {
+  onRequireAuth: () => void;
+  onOrderComplete: (payload: {
+    packageId: string;
     gameTitle: string;
     packageLabel: string;
     playerId: string;
+    zoneId?: string;
     amountUsd: number;
     paymentMethod: string;
+    referenceCode?: string;
+    proofImage?: string;
     usedWallet: boolean;
-  }) => void;
+  }) => Promise<UserOrder>;
   onClose: () => void;
 }
 
 export function QuickTopUpModal({
   game,
+  isAuthenticated,
   isResellerMode,
   walletBalanceUsd,
+  onRequireAuth,
   onOrderComplete,
   onClose
 }: QuickTopUpModalProps) {
   const [playerId, setPlayerId] = useState('');
   const [zoneId, setZoneId] = useState('');
+  const [referenceCode, setReferenceCode] = useState('');
+  const [proofImage, setProofImage] = useState<string | undefined>(undefined);
+  const [proofFileName, setProofFileName] = useState('');
+  const [channels, setChannels] = useState<PublicPaymentChannel[]>([]);
   const [selectedPackId, setSelectedPackId] = useState<string>('');
-  const [paymentId, setPaymentId] = useState<'wallet' | 'binance' | 'ecuador'>('binance');
-  const [orderSubmitted, setOrderSubmitted] = useState(false);
+  const [paymentId, setPaymentId] = useState<string>(isAuthenticated ? 'wallet' : '');
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [createdOrder, setCreatedOrder] = useState<UserOrder | null>(null);
+
+  useEffect(() => {
+    if (!game) {
+      return;
+    }
+    fetchActiveChannels()
+      .then((res) => {
+        const list = res.channels ?? [];
+        setChannels(list);
+        setPaymentId((curr) => {
+          if (curr === 'wallet' && isAuthenticated) {
+            return 'wallet';
+          }
+          if (curr && list.some((c) => c.id === curr)) {
+            return curr;
+          }
+          return isAuthenticated ? 'wallet' : list[0]?.id ?? '';
+        });
+      })
+      .catch(() => {});
+
+    const socket = createUserSocket();
+    socket.on('catalog:channels', (payload: { channels: PublicPaymentChannel[] }) => {
+      if (payload?.channels) {
+        setChannels(payload.channels);
+        setPaymentId((curr) => {
+          if (curr === 'wallet') {
+            return 'wallet';
+          }
+          if (payload.channels.some((c) => c.id === curr)) {
+            return curr;
+          }
+          return payload.channels[0]?.id ?? (isAuthenticated ? 'wallet' : '');
+        });
+      }
+    });
+    return () => {
+      socket.disconnect();
+    };
+  }, [game, isAuthenticated]);
 
   if (!game) {
     return null;
@@ -41,22 +97,75 @@ export function QuickTopUpModal({
 
   const finalPrice = isResellerMode ? activePack.resellerPriceUsd : activePack.publicPriceUsd;
   const savings = activePack.publicPriceUsd - activePack.resellerPriceUsd;
+  const selectedChannel = channels.find((c) => c.id === paymentId) ?? null;
 
-  const handleConfirm = (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setProofImage(undefined);
+      setProofFileName('');
+      return;
+    }
+    if (file.size > 1_100_000) {
+      setErrorMessage('El comprobante debe pesar menos de 1 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setProofImage(reader.result);
+        setProofFileName(file.name);
+        setErrorMessage(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
     if (!playerId.trim()) {
       return;
     }
-    const methodName = PAYMENT_METHODS.find((m) => m.id === paymentId)?.name ?? 'Binance Pay';
-    onOrderComplete?.({
-      gameTitle: game.title,
-      packageLabel: activePack.label,
-      playerId: playerId.trim(),
-      amountUsd: finalPrice,
-      paymentMethod: methodName,
-      usedWallet: paymentId === 'wallet'
-    });
-    setOrderSubmitted(true);
+    if (game.requiresZoneId && !zoneId.trim()) {
+      return;
+    }
+    if (!isAuthenticated) {
+      onRequireAuth();
+      return;
+    }
+
+    const usedWallet = paymentId === 'wallet';
+    const methodName = usedWallet
+      ? 'Billetera Nova USD'
+      : selectedChannel?.name ?? channels[0]?.name ?? 'Transferencia';
+
+    if (!usedWallet && !selectedChannel && channels.length === 0) {
+      setErrorMessage('No hay medios de cobro externos activos en este momento.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const order = await onOrderComplete({
+        packageId: activePack.id,
+        gameTitle: game.title,
+        packageLabel: activePack.label,
+        playerId: playerId.trim(),
+        zoneId: game.requiresZoneId ? zoneId.trim() : undefined,
+        amountUsd: finalPrice,
+        paymentMethod: methodName,
+        referenceCode: !usedWallet ? referenceCode.trim() || undefined : undefined,
+        proofImage: !usedWallet ? proofImage : undefined,
+        usedWallet
+      });
+      setCreatedOrder(order);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'No se pudo registrar la orden.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -80,39 +189,50 @@ export function QuickTopUpModal({
           </button>
         </div>
 
-        {orderSubmitted ? (
+        {createdOrder ? (
           <div className="nc-order-success">
             <div className="nc-success-ring">
               <CheckCircle2 size={38} />
             </div>
-            <h4>Orden Lista para Procesar</h4>
+            <h4>
+              {createdOrder.status === 'Pendiente'
+                ? 'Orden Registrada · Pendiente de Validación'
+                : 'Orden Confirmada'}
+            </h4>
             <p>
-              <strong>{activePack.label}</strong> para <strong>{game.title}</strong> ({playerId}
-              {game.requiresZoneId && zoneId ? ` · Zone ${zoneId}` : ''})
+              Orden <strong className="nc-mono">{createdOrder.id}</strong> ·{' '}
+              <strong>{createdOrder.packageLabel}</strong> para{' '}
+              <strong>{createdOrder.gameTitle}</strong> ({createdOrder.playerId})
             </p>
             <div className="nc-success-summary">
               <div>
                 <span>Total en USD</span>
-                <strong className="nc-mono">${finalPrice.toFixed(2)} USD</strong>
+                <strong className="nc-mono">${createdOrder.amountUsd.toFixed(2)} USD</strong>
               </div>
               <div>
-                <span>Método</span>
-                <strong>{PAYMENT_METHODS.find((m) => m.id === paymentId)?.name}</strong>
+                <span>Estado</span>
+                <strong>{createdOrder.status}</strong>
               </div>
             </div>
             <button
               type="button"
               className="nc-btn nc-btn-primary nc-btn-full"
               onClick={() => {
-                setOrderSubmitted(false);
+                setCreatedOrder(null);
                 onClose();
               }}
             >
-              Finalizar Vista Previa
+              Cerrar
             </button>
           </div>
         ) : (
           <form onSubmit={handleConfirm} className="nc-modal-body">
+            {errorMessage && (
+              <div className="nc-auth-error" role="alert">
+                {errorMessage}
+              </div>
+            )}
+
             <div className="nc-step-block">
               <label className="nc-step-title">
                 <span className="nc-step-num">1</span>
@@ -186,25 +306,86 @@ export function QuickTopUpModal({
               </span>
 
               <div className="nc-pay-grid">
-                {PAYMENT_METHODS.map((method) => (
+                <button
+                  type="button"
+                  className={`nc-pay-item ${paymentId === 'wallet' ? 'is-selected' : ''}`}
+                  onClick={() => {
+                    setPaymentId('wallet');
+                    setErrorMessage(null);
+                  }}
+                >
+                  <div className="nc-pay-head">
+                    <strong>Billetera Nova USD</strong>
+                    <span className="nc-pay-badge">
+                      {walletBalanceUsd !== undefined
+                        ? `Saldo: $${walletBalanceUsd.toFixed(2)}`
+                        : '0% Comisión'}
+                    </span>
+                  </div>
+                  <span className="nc-pay-sub">Compra en 1 clic con tu saldo USD</span>
+                </button>
+
+                {channels.map((ch) => (
                   <button
-                    key={method.id}
+                    key={ch.id}
                     type="button"
-                    className={`nc-pay-item ${paymentId === method.id ? 'is-selected' : ''}`}
-                    onClick={() => setPaymentId(method.id)}
+                    className={`nc-pay-item ${paymentId === ch.id ? 'is-selected' : ''}`}
+                    onClick={() => {
+                      setPaymentId(ch.id);
+                      setErrorMessage(null);
+                    }}
                   >
                     <div className="nc-pay-head">
-                      <strong>{method.name}</strong>
-                      <span className="nc-pay-badge">
-                        {method.id === 'wallet' && walletBalanceUsd !== undefined
-                          ? `Saldo: $${walletBalanceUsd.toFixed(2)}`
-                          : method.badge}
-                      </span>
+                      <strong>{ch.name}</strong>
+                      <span className="nc-pay-badge">{ch.priority}</span>
                     </div>
-                    <span className="nc-pay-sub">{method.subtitle}</span>
+                    <span className="nc-pay-sub">{ch.accountDetail}</span>
                   </button>
                 ))}
               </div>
+
+              {paymentId !== 'wallet' && selectedChannel && (
+                <div className="nc-field-group" style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="nc-reseller-sim" style={{ padding: 10, fontSize: '0.78rem', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {selectedChannel.qrImage && (
+                      <img
+                        src={selectedChannel.qrImage}
+                        alt={`QR ${selectedChannel.name}`}
+                        style={{
+                          width: 112,
+                          height: 112,
+                          borderRadius: 10,
+                          objectFit: 'contain',
+                          background: '#ffffff',
+                          padding: 4,
+                          flexShrink: 0
+                        }}
+                      />
+                    )}
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <strong style={{ display: 'block', marginBottom: 4 }}>{selectedChannel.name}</strong>
+                      <span style={{ opacity: 0.9 }}>{selectedChannel.accountDetail}</span>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={referenceCode}
+                    onChange={(e) => setReferenceCode(e.target.value)}
+                    placeholder="Número de comprobante o referencia (opcional)"
+                    className="nc-input"
+                  />
+                  <label className="nc-btn nc-btn-ghost nc-btn-sm" style={{ cursor: 'pointer', justifyContent: 'flex-start' }}>
+                    <Upload size={14} />
+                    <span>{proofFileName ? `Adjunto: ${proofFileName}` : 'Adjuntar captura de comprobante (opcional)'}</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleFileChange}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
 
             <div className="nc-modal-footer">
@@ -220,9 +401,15 @@ export function QuickTopUpModal({
                 </div>
               </div>
 
-              <button type="submit" className="nc-btn nc-btn-primary nc-btn-lg">
+              <button type="submit" disabled={submitting} className="nc-btn nc-btn-primary nc-btn-lg">
                 <Zap size={17} />
-                <span>Confirmar Recarga</span>
+                <span>
+                  {submitting
+                    ? 'Procesando...'
+                    : isAuthenticated
+                      ? 'Confirmar Recarga'
+                      : 'Ingresar para Comprar'}
+                </span>
               </button>
             </div>
 

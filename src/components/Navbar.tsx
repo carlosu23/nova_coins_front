@@ -16,9 +16,8 @@ import {
   Zap
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { type UserProfile } from '../data/mockUser';
+import { type PanelSection, type UserProfile } from '../types/user';
 import { NovaLogo } from './NovaLogo';
-import { type PanelSection } from './ResellerPanelPage';
 
 interface NavbarProps {
   searchQuery: string;
@@ -75,11 +74,11 @@ export function Navbar({
   const firstName = currentUser?.fullName.split(' ')[0] ?? '';
   const initials = currentUser
     ? currentUser.fullName
-        .split(' ')
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((p) => p[0]?.toUpperCase() ?? '')
-        .join('')
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? '')
+      .join('')
     : '';
 
   const isResellerUser = currentUser?.role === 'Revendedor';
@@ -262,11 +261,10 @@ export function Navbar({
                   <span className="nc-burger-label">Panel Reseller</span>
                   <button
                     type="button"
-                    className={`nc-b2b-nav-item ${
-                      activePage === 'reseller-panel' && resellerSection === 'catalog'
-                        ? 'is-active'
-                        : ''
-                    }`}
+                    className={`nc-b2b-nav-item ${activePage === 'reseller-panel' && resellerSection === 'catalog'
+                      ? 'is-active'
+                      : ''
+                      }`}
                     onClick={() => handleResellerNav('catalog')}
                   >
                     <ShoppingBag size={17} />
@@ -274,11 +272,10 @@ export function Navbar({
                   </button>
                   <button
                     type="button"
-                    className={`nc-b2b-nav-item ${
-                      activePage === 'reseller-panel' && resellerSection === 'overview'
-                        ? 'is-active'
-                        : ''
-                    }`}
+                    className={`nc-b2b-nav-item ${activePage === 'reseller-panel' && resellerSection === 'overview'
+                      ? 'is-active'
+                      : ''
+                      }`}
                     onClick={() => handleResellerNav('overview')}
                   >
                     <LayoutDashboard size={17} />
@@ -286,11 +283,10 @@ export function Navbar({
                   </button>
                   <button
                     type="button"
-                    className={`nc-b2b-nav-item ${
-                      activePage === 'reseller-panel' && resellerSection === 'calculator'
-                        ? 'is-active'
-                        : ''
-                    }`}
+                    className={`nc-b2b-nav-item ${activePage === 'reseller-panel' && resellerSection === 'calculator'
+                      ? 'is-active'
+                      : ''
+                      }`}
                     onClick={() => handleResellerNav('calculator')}
                   >
                     <Calculator size={17} />
@@ -298,11 +294,10 @@ export function Navbar({
                   </button>
                   <button
                     type="button"
-                    className={`nc-b2b-nav-item ${
-                      activePage === 'reseller-panel' && resellerSection === 'clients'
-                        ? 'is-active'
-                        : ''
-                    }`}
+                    className={`nc-b2b-nav-item ${activePage === 'reseller-panel' && resellerSection === 'clients'
+                      ? 'is-active'
+                      : ''
+                      }`}
                     onClick={() => handleResellerNav('clients')}
                   >
                     <Gamepad2 size={17} />
@@ -310,11 +305,10 @@ export function Navbar({
                   </button>
                   <button
                     type="button"
-                    className={`nc-b2b-nav-item ${
-                      activePage === 'reseller-panel' && resellerSection === 'orders'
-                        ? 'is-active'
-                        : ''
-                    }`}
+                    className={`nc-b2b-nav-item ${activePage === 'reseller-panel' && resellerSection === 'orders'
+                      ? 'is-active'
+                      : ''
+                      }`}
                     onClick={() => handleResellerNav('orders')}
                   >
                     <Receipt size={17} />

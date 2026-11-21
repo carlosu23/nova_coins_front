@@ -5,13 +5,13 @@ import { HeroCarousel } from './components/HeroCarousel';
 import { HowItWorks } from './components/HowItWorks';
 import { Navbar } from './components/Navbar';
 import { QuickNavStrip } from './components/QuickNavStrip';
-import { type PanelSection } from './components/ResellerPanelPage';
+import { buildWhatsAppLink } from './config/env';
 import { type GameItem, INITIAL_CATALOG } from './data/catalog';
-import { type UserOrder, type UserProfile } from './data/mockUser';
 import {
   clearStoredToken,
   createOrderRequest,
   createUserSocket,
+  fetchCatalog,
   fetchCatalogMargins,
   fetchCurrentUser,
   getStoredToken,
@@ -19,6 +19,7 @@ import {
   savePlayerIdRequest,
   topUpWalletRequest
 } from './services/api';
+import { type PanelSection, type UserOrder, type UserProfile } from './types/user';
 import './styles/home.css';
 
 const AuthModal = lazy(() =>
@@ -56,6 +57,7 @@ export function App() {
   const [activeFilter, setActiveFilter] = useState<CatalogFilter>('all');
   const [selectedGame, setSelectedGame] = useState<GameItem | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [catalogGames, setCatalogGames] = useState<GameItem[]>(INITIAL_CATALOG);
   const [marginOverrides, setMarginOverrides] = useState<MarginOverride[]>([]);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -72,9 +74,17 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    fetchCatalog()
+      .then((res) => {
+        if (res.games && res.games.length > 0) {
+          setCatalogGames(res.games);
+        }
+      })
+      .catch(() => { });
+
     fetchCatalogMargins()
       .then((res) => setMarginOverrides(res.margins))
-      .catch(() => {});
+      .catch(() => { });
 
     if (!getStoredToken()) {
       return;
@@ -101,6 +111,11 @@ export function App() {
         setMarginOverrides(payload.margins);
       }
     });
+    socket.on('catalog:updated', (payload: { games: GameItem[] }) => {
+      if (payload?.games && payload.games.length > 0) {
+        setCatalogGames(payload.games);
+      }
+    });
     return () => {
       socket.disconnect();
     };
@@ -108,23 +123,23 @@ export function App() {
 
   const liveCatalog = useMemo(() => {
     if (marginOverrides.length === 0) {
-      return INITIAL_CATALOG;
+      return catalogGames;
     }
     const map = new Map(marginOverrides.map((m) => [m.id, m]));
-    return INITIAL_CATALOG.map((game) => ({
+    return catalogGames.map((game) => ({
       ...game,
       packages: game.packages.map((pack) => {
         const override = map.get(pack.id);
         return override
           ? {
-              ...pack,
-              publicPriceUsd: override.publicPriceUsd,
-              resellerPriceUsd: override.resellerPriceUsd
-            }
+            ...pack,
+            publicPriceUsd: override.publicPriceUsd,
+            resellerPriceUsd: override.resellerPriceUsd
+          }
           : pack;
       })
     }));
-  }, [marginOverrides]);
+  }, [catalogGames, marginOverrides]);
 
   const navigateTo = (page: ActivePage) => {
     setActivePage(page);
@@ -163,13 +178,24 @@ export function App() {
     }, 3600);
   };
 
+  const handleSupportClick = () => {
+    const whatsappHref = buildWhatsAppLink('Hola Nova Coins, necesito soporte con una recarga.');
+    if (whatsappHref) {
+      window.open(whatsappHref, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    showToast('Atención directa Ecuador (+593) para pagos y soporte.');
+  };
+
   const handleTopUpWallet = async (amountUsd: number) => {
     try {
       const res = await topUpWalletRequest(amountUsd);
       setCurrentUser(res.user);
-      showToast(`+$${amountUsd.toFixed(2)} USD acreditados a tu billetera.`);
+      showToast(
+        `Solicitud de fondeo ${res.order.id} ($${amountUsd.toFixed(2)} USD) enviada para validación.`
+      );
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'No se pudo fondear la billetera.');
+      showToast(err instanceof Error ? err.message : 'No se pudo solicitar el fondeo.');
     }
   };
 
@@ -198,11 +224,12 @@ export function App() {
       `ID Jugador: ${order.playerId}`,
       `Estado: ${order.status}`
     ].join('\n');
-    navigator.clipboard?.writeText(receipt).catch(() => {});
+    navigator.clipboard?.writeText(receipt).catch(() => { });
     showToast(`Comprobante ${order.id} copiado para tu cliente.`);
   };
 
   const handleOrderComplete = async (payload: {
+    packageId?: string;
     gameTitle: string;
     packageLabel: string;
     playerId: string;
@@ -211,16 +238,22 @@ export function App() {
     whatsapp?: string;
     amountUsd: number;
     paymentMethod: string;
+    referenceCode?: string;
+    proofImage?: string;
     usedWallet: boolean;
-  }) => {
+  }): Promise<UserOrder> => {
     if (!getStoredToken()) {
-      return;
+      setAuthModalOpen(true);
+      throw new Error('Inicia sesión para completar tu recarga.');
     }
     try {
       const res = await createOrderRequest(payload);
       setCurrentUser(res.user);
+      return res.order;
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'No se pudo registrar la orden.');
+      const msg = err instanceof Error ? err.message : 'No se pudo registrar la orden.';
+      showToast(msg);
+      throw err;
     }
   };
 
@@ -262,9 +295,7 @@ export function App() {
           }
           showToast('Sesión cerrada.');
         }}
-        onSupportClick={() =>
-          showToast('Atención directa Ecuador (+593) por WhatsApp para pagos y soporte.')
-        }
+        onSupportClick={handleSupportClick}
       />
 
       <main>
@@ -274,6 +305,7 @@ export function App() {
           ) : activePage === 'reseller-panel' && isReseller && currentUser ? (
             <ResellerPanelPage
               user={currentUser}
+              catalog={liveCatalog}
               activeSection={resellerSection}
               onSectionChange={setResellerSection}
               onBackHome={() => navigateTo('home')}
@@ -292,14 +324,13 @@ export function App() {
             <>
               <HeroCarousel
                 featuredGame={liveCatalog[0]}
+                allGames={liveCatalog}
                 onQuickSelectGame={setSelectedGame}
               />
 
               <QuickNavStrip
                 onSelectFilter={setActiveFilter}
-                onSupportClick={() =>
-                  showToast('Atención directa Ecuador (+593) por WhatsApp para pagos y soporte.')
-                }
+                onSupportClick={handleSupportClick}
               />
 
               <CatalogSection
@@ -321,14 +352,21 @@ export function App() {
         onOpenResellerModal={() =>
           navigateTo(isReseller ? 'reseller-panel' : 'reseller')
         }
+        onSupportClick={handleSupportClick}
       />
 
       <Suspense fallback={null}>
         <QuickTopUpModal
           key={selectedGame?.id ?? 'none'}
           game={selectedGame}
+          isAuthenticated={Boolean(currentUser)}
           isResellerMode={isReseller}
           walletBalanceUsd={currentUser?.walletBalanceUsd}
+          onRequireAuth={() => {
+            setSelectedGame(null);
+            setAuthModalOpen(true);
+            showToast('Inicia sesión o regístrate para completar tu recarga.');
+          }}
           onOrderComplete={handleOrderComplete}
           onClose={() => setSelectedGame(null)}
         />

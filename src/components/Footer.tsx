@@ -1,11 +1,15 @@
 import { Crown, MessageCircle, ShieldCheck } from 'lucide-react';
+import { buildWhatsAppLink } from '../config/env';
 import { NovaLogo } from './NovaLogo';
 
 interface FooterProps {
   onOpenResellerModal: () => void;
+  onSupportClick: () => void;
 }
 
-export function Footer({ onOpenResellerModal }: FooterProps) {
+export function Footer({ onOpenResellerModal, onSupportClick }: FooterProps) {
+  const whatsappHref = buildWhatsAppLink('Hola Nova Coins, necesito soporte con una recarga.');
+
   return (
     <footer className="nc-footer">
       <div className="nc-container nc-footer-grid">
@@ -45,10 +49,26 @@ export function Footer({ onOpenResellerModal }: FooterProps) {
           <p className="nc-footer-support-note">
             Validación automática y soporte directo por WhatsApp para pagos locales.
           </p>
-          <a href="#top" className="nc-btn nc-btn-ghost nc-btn-sm">
-            <MessageCircle size={15} />
-            <span>Canal Oficial WhatsApp</span>
-          </a>
+          {whatsappHref ? (
+            <a
+              href={whatsappHref}
+              target="_blank"
+              rel="noreferrer"
+              className="nc-btn nc-btn-ghost nc-btn-sm"
+            >
+              <MessageCircle size={15} />
+              <span>Canal Oficial WhatsApp</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="nc-btn nc-btn-ghost nc-btn-sm"
+              onClick={onSupportClick}
+            >
+              <MessageCircle size={15} />
+              <span>Canal Oficial WhatsApp</span>
+            </button>
+          )}
         </div>
       </div>
 

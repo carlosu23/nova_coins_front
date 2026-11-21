@@ -1,5 +1,7 @@
 import { ArrowLeft, CheckCircle2, Crown, Mail, MessageCircle, Phone, Send, ShieldCheck, Store, User } from 'lucide-react';
 import { useState } from 'react';
+import { buildWhatsAppLink } from '../config/env';
+import { submitResellerApplicationRequest } from '../services/api';
 
 interface ResellerPageProps {
   onBackHome: () => void;
@@ -12,9 +14,11 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
   const [phone, setPhone] = useState('');
   const [monthlyVolume, setMonthlyVolume] = useState('$100 - $500 USD');
   const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
 
-  const buildWhatsAppUrl = () => {
+  const getWhatsAppUrl = () => {
     const text = [
       'Hola Nova Coins, quiero solicitar acceso como Reseller.',
       fullName ? `Nombre: ${fullName}` : '',
@@ -27,15 +31,34 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
       .filter(Boolean)
       .join('\n');
 
-    return `https://wa.me/593999999999?text=${encodeURIComponent(text)}`;
+    return buildWhatsAppLink(text);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const whatsappUrl = getWhatsAppUrl();
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     if (!fullName.trim() || !email.trim() || !phone.trim()) {
       return;
     }
-    setSubmittedRef(`RES-${Date.now().toString().slice(-5)}`);
+
+    setSubmitting(true);
+    try {
+      const res = await submitResellerApplicationRequest({
+        fullName: fullName.trim(),
+        businessName: businessName.trim() || undefined,
+        email: email.trim(),
+        phone: phone.trim(),
+        monthlyVolume,
+        message: message.trim() || undefined
+      });
+      setSubmittedRef(res.referenceCode);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'No se pudo enviar tu solicitud.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -59,7 +82,7 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
 
             <p className="nc-reseller-desc">
               El alta de cuentas revendedoras se realiza exclusivamente mediante solicitud previa con
-              nuestro equipo comercial. Completa el formulario o contáctanos directo por WhatsApp.
+              nuestro equipo comercial. Completa el formulario y te contactaremos a la brevedad.
             </p>
 
             <div className="nc-reseller-highlights">
@@ -94,20 +117,29 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
                 </p>
 
                 <div className="nc-reseller-success-actions">
-                  <a
-                    href={buildWhatsAppUrl()}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="nc-btn nc-btn-gold nc-btn-lg nc-btn-full"
-                  >
-                    <MessageCircle size={17} />
-                    <span>Enviar también por WhatsApp</span>
-                  </a>
+                  {whatsappUrl && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="nc-btn nc-btn-gold nc-btn-lg nc-btn-full"
+                    >
+                      <MessageCircle size={17} />
+                      <span>Enviar también por WhatsApp</span>
+                    </a>
+                  )}
 
                   <button
                     type="button"
                     className="nc-btn nc-btn-ghost nc-btn-full"
-                    onClick={() => setSubmittedRef(null)}
+                    onClick={() => {
+                      setSubmittedRef(null);
+                      setFullName('');
+                      setBusinessName('');
+                      setEmail('');
+                      setPhone('');
+                      setMessage('');
+                    }}
                   >
                     Enviar otra solicitud
                   </button>
@@ -116,6 +148,12 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
             ) : (
               <form onSubmit={handleSubmit} className="nc-auth-form">
                 <h2 className="nc-reseller-form-title">Formulario de Contacto</h2>
+
+                {errorMessage && (
+                  <div className="nc-auth-error" role="alert">
+                    {errorMessage}
+                  </div>
+                )}
 
                 <div className="nc-field-group">
                   <label className="nc-field-label" htmlFor="res-name">
@@ -129,7 +167,7 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Ej: Mateo Andrade"
+                      placeholder="Tu nombre completo"
                       className="nc-input nc-input-with-icon"
                     />
                   </div>
@@ -146,7 +184,7 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
                       type="text"
                       value={businessName}
                       onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="Ej: Recargas EC"
+                      placeholder="Nombre de tu negocio"
                       className="nc-input nc-input-with-icon"
                     />
                   </div>
@@ -223,20 +261,26 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
                 </div>
 
                 <div className="nc-reseller-form-actions">
-                  <button type="submit" className="nc-btn nc-btn-gold nc-btn-lg nc-btn-full">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="nc-btn nc-btn-gold nc-btn-lg nc-btn-full"
+                  >
                     <Send size={16} />
-                    <span>Enviar Solicitud por Formulario</span>
+                    <span>{submitting ? 'Enviando...' : 'Enviar Solicitud por Formulario'}</span>
                   </button>
 
-                  <a
-                    href={buildWhatsAppUrl()}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="nc-btn nc-btn-whatsapp nc-btn-lg nc-btn-full"
-                  >
-                    <MessageCircle size={17} />
-                    <span>Solicitar por WhatsApp</span>
-                  </a>
+                  {whatsappUrl && (
+                    <a
+                      href={whatsappUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="nc-btn nc-btn-whatsapp nc-btn-lg nc-btn-full"
+                    >
+                      <MessageCircle size={17} />
+                      <span>Solicitar por WhatsApp</span>
+                    </a>
+                  )}
                 </div>
               </form>
             )}
@@ -246,4 +290,3 @@ export function ResellerPage({ onBackHome }: ResellerPageProps) {
     </section>
   );
 }
-

@@ -1,6 +1,7 @@
-import { CheckCircle2, Gamepad2, History, LogOut, Mail, Phone, Plus, ShieldCheck, Wallet, X } from 'lucide-react';
+import { CheckCircle2, Gamepad2, History, KeyRound, LogOut, Mail, Phone, Plus, ShieldCheck, Wallet, X } from 'lucide-react';
 import { useState } from 'react';
-import { type UserProfile } from '../data/mockUser';
+import { type UserProfile } from '../types/user';
+import { ApiKeysManager } from './ApiKeysManager';
 
 interface ProfileModalProps {
   open: boolean;
@@ -37,6 +38,7 @@ export function ProfileModal({
       return;
     }
     onTopUpWallet(Number(parsed.toFixed(2)));
+    setCustomAmount('');
   };
 
   return (
@@ -166,6 +168,14 @@ export function ProfileModal({
                 ))
               )}
             </div>
+          </div>
+
+          <div className="nc-profile-section">
+            <h4 className="nc-profile-section-title">
+              <KeyRound size={15} />
+              <span>Mis API Keys (/api/v1)</span>
+            </h4>
+            <ApiKeysManager compact />
           </div>
 
           <div className="nc-profile-actions">

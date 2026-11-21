@@ -1,6 +1,6 @@
 import { CheckCircle2, Eye, EyeOff, Lock, Mail, Phone, ShieldCheck, User, X } from 'lucide-react';
 import { useState } from 'react';
-import { type UserProfile } from '../data/mockUser';
+import { type UserProfile } from '../types/user';
 import { loginRequest, registerRequest, setStoredToken } from '../services/api';
 import { NovaLogo } from './NovaLogo';
 
