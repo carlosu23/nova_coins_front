@@ -281,7 +281,7 @@ export function ProfileModal({
                   </div>
                 ) : null}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '8px', alignItems: 'center' }}>
                   <input
                     type="text"
                     className="nc-input"
@@ -341,7 +341,7 @@ export function ProfileModal({
             <div className="nc-profile-section" style={{ display: 'grid', gap: '12px' }}>
               <form onSubmit={handleProfileSave} className="nc-profile-row-card" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
                 <strong style={{ fontSize: '0.88rem' }}>Datos personales</strong>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
                   <input
                     type="text"
                     className="nc-input"
@@ -372,7 +372,7 @@ export function ProfileModal({
                   <Lock size={14} />
                   <span>Cambiar contraseña</span>
                 </strong>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px' }}>
                   <input
                     type="password"
                     className="nc-input"

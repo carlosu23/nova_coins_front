@@ -277,7 +277,8 @@ export function ResellerPanelPage({
       setSaleAccountName('');
       setSaleWhatsapp('');
     } catch {
-      // Error toast handled by parent
+      setSubmittingSale(false);
+      return;
     } finally {
       setSubmittingSale(false);
     }

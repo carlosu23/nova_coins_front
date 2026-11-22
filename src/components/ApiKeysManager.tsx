@@ -125,13 +125,13 @@ export function ApiKeysManager({ compact = false }: { compact?: boolean }) {
             onChange={(e) => setName(e.target.value)}
             placeholder="Nombre de la llave (ej: Bot Tienda)"
             className="nc-input"
-            style={{ flex: 1, minWidth: 160 }}
+            style={{ flex: '1 1 160px', minWidth: 0, maxWidth: '100%' }}
           />
           <select
             value={environment}
             onChange={(e) => setEnvironment(e.target.value as 'production' | 'sandbox')}
             className="nc-input"
-            style={{ width: 'auto', minWidth: 150 }}
+            style={{ flex: '1 1 150px', minWidth: 0, maxWidth: '100%' }}
             aria-label="Entorno de API Key"
           >
             <option value="sandbox">Sandbox (Pruebas)</option>
@@ -144,7 +144,7 @@ export function ApiKeysManager({ compact = false }: { compact?: boolean }) {
               onChange={(e) => setAllowedIps(e.target.value)}
               placeholder="IPs permitidas (opcional, sep. por coma)"
               className="nc-input nc-mono"
-              style={{ flex: 1, minWidth: 200 }}
+              style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}
             />
           )}
           <button type="submit" disabled={creating} className="nc-btn nc-btn-gold nc-btn-sm">
@@ -206,7 +206,7 @@ export function ApiKeysManager({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <div className="nc-reseller-sim" style={{ fontSize: '0.76rem' }}>
           <strong style={{ display: 'block', marginBottom: 6 }}>Uso rápido (API Pública v1):</strong>
-          <code className="nc-mono" style={{ display: 'block', whiteSpace: 'pre-wrap', opacity: 0.9 }}>
+          <code className="nc-mono" style={{ display: 'block', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word', opacity: 0.9 }}>
             {`curl ${v1Base}/catalog -H "Authorization: Bearer TU_API_KEY"\ncurl -X POST ${v1Base}/orders -H "Authorization: Bearer TU_API_KEY" -H "Idempotency-Key: ord-001" -H "Content-Type: application/json" -d '{"packageId":"ff-310","playerId":"2491857302"}'`}
           </code>
         </div>
