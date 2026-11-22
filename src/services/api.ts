@@ -43,7 +43,7 @@ export function createUserSocket(token?: string | null): Socket {
   });
 }
 
-export function fetchCatalog(): Promise<{ games: GameItem[] }> {
+export function fetchCatalog(): Promise<{ games: GameItem[]; whatsappNumber?: string }> {
   return apiRequest('/catalog');
 }
 

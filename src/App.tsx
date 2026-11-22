@@ -5,7 +5,7 @@ import { HeroCarousel } from './components/HeroCarousel';
 import { HowItWorks } from './components/HowItWorks';
 import { Navbar } from './components/Navbar';
 import { QuickNavStrip } from './components/QuickNavStrip';
-import { buildWhatsAppLink } from './config/env';
+import { buildWhatsAppLink, setWhatsappNumber } from './config/env';
 import { type GameItem, INITIAL_CATALOG } from './data/catalog';
 import {
   clearStoredToken,
@@ -79,6 +79,9 @@ export function App() {
         if (res.games && res.games.length > 0) {
           setCatalogGames(res.games);
         }
+        if (typeof res.whatsappNumber === 'string') {
+          setWhatsappNumber(res.whatsappNumber);
+        }
       })
       .catch(() => { });
 
@@ -114,6 +117,11 @@ export function App() {
     socket.on('catalog:updated', (payload: { games: GameItem[] }) => {
       if (payload?.games && payload.games.length > 0) {
         setCatalogGames(payload.games);
+      }
+    });
+    socket.on('catalog:whatsapp', (payload: { whatsappNumber: string }) => {
+      if (typeof payload?.whatsappNumber === 'string') {
+        setWhatsappNumber(payload.whatsappNumber);
       }
     });
     return () => {

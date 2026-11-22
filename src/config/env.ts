@@ -1,16 +1,22 @@
-export const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(
+const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(
   /\/+$/,
   ''
 );
 
+export const API_BASE = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+
 export const SOCKET_URL = API_BASE.replace(/\/api$/, '');
 
-export const WHATSAPP_NUMBER = String(import.meta.env.VITE_WHATSAPP_NUMBER || '').replace(/\D/g, '');
+let currentWhatsappNumber = '';
+
+export function setWhatsappNumber(raw?: string | null) {
+  currentWhatsappNumber = String(raw || '').replace(/\D/g, '');
+}
 
 export function buildWhatsAppLink(message?: string): string | null {
-  if (!WHATSAPP_NUMBER) {
+  if (!currentWhatsappNumber) {
     return null;
   }
-  const base = `https://wa.me/${WHATSAPP_NUMBER}`;
+  const base = `https://wa.me/${currentWhatsappNumber}`;
   return message ? `${base}?text=${encodeURIComponent(message)}` : base;
 }
